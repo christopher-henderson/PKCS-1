@@ -1,0 +1,8 @@
+[package]
+name = "PKCS-1"
+version = "0.1.0"
+authors = ["christopher-henderson <chris@chenderson.org>"]
+edition = "2018"
+
+[dependencies]
+num-bigint = "0.2"
