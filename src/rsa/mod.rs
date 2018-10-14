@@ -46,14 +46,24 @@ fn RSADP(privkey: PrivateKey, c: &BigUint) -> BigUint {
     c.modpow(&privkey.d, &privkey.n)
 }
 
-// @TODO enticingly easy, but dragons.
-fn I2OSP(x: u32, _xLen: u32) -> [u8; 4] {
-    unsafe { transmute(x) }
+#[cfg(target_endian = "big")]
+fn I2OSP(x: BigUint) -> Vec<u8> {
+    x.to_bytes_be()
 }
 
-// @TODO enticingly easy, but dragons.
-fn OS2IP(X: [u8; 4]) -> u32 {
-    unsafe { transmute(X) }
+#[cfg(arget_endian = "little")]
+fn I2OSP(x: BigUint) -> Vec<u8> {
+    x.to_bytes_le()
+}
+
+#[cfg(target_endian = "big")]
+fn OS2IP(X: Vec<u8>) -> BigUint {
+    BigUint::from_bytes_be(&X)
+}
+
+#[cfg(target_endian = "little")]
+fn OS2IP(X: Vec<u8>) -> BigUint {
+    BigUint::from_bytes_le(&X)
 }
 
 fn RSASP1(K: &PrivateKey, m: &BigUint) -> Signature {
