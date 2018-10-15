@@ -6,3 +6,6 @@ edition = "2018"
 
 [dependencies]
 num-bigint = "0.2"
+sha2 = "0.8.0"
+rand = "*"
+rand_core = "*"
