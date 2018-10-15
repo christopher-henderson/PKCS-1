@@ -34,12 +34,12 @@ pub fn new_key_pair() -> (PublicKey, PrivateKey) {
     // @TODO https://en.wikipedia.org/wiki/RSA_(cryptosystem)#Key_generation
     (
         PublicKey {
-            n: BigUint::new(vec![3233]),
-            e: BigUint::new(vec![17]),
+            n: BigUint::from(3233 as u32),
+            e: BigUint::from(17 as u32),
         },
         PrivateKey {
-            n: BigUint::new(vec![3233]),
-            d: BigUint::new(vec![413]),
+            n: BigUint::from(3233 as u32),
+            d: BigUint::from(413 as u32),
         },
     )
 }
