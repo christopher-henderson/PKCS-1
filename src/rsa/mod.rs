@@ -14,22 +14,23 @@ use rand_core::RngCore;
 
 use sha2::{Digest, Sha256};
 
-const hLen: usize = 256;
+const H_LEN: usize = 256;
 
 type Signature = BigUint;
 
-struct PublicKey {
+#[derive(Debug)]
+pub struct PublicKey {
     pub n: BigUint,
     pub e: BigUint,
 }
 
 #[derive(Debug)]
-struct PrivateKey {
+pub struct PrivateKey {
     pub n: BigUint,
     pub d: BigUint,
 }
 
-fn new_key_pair() -> (PublicKey, PrivateKey) {
+pub fn new_key_pair() -> (PublicKey, PrivateKey) {
     // @TODO https://en.wikipedia.org/wiki/RSA_(cryptosystem)#Key_generation
     (
         PublicKey {
@@ -43,119 +44,118 @@ fn new_key_pair() -> (PublicKey, PrivateKey) {
     )
 }
 
-fn RSAEP(pubkey: &PublicKey, m: &BigUint) -> BigUint {
+pub fn rsaes_oaep_encrypt(pubkey: &PublicKey, m: Vec<u8>, l: &Vec<u8>) -> Vec<u8> {
+    // @TODO input validation step
+    // k - mLen - 2H_LEN - 2 zero octets
+    // 2. EME-OAEP encoding
+    let em = eme_oaep_encode(pubkey, m, l);
+    let m = os2ip(em);
+    let c = rsaep(pubkey, &m);
+    i2osp(c)
+}
+
+fn rsaep(pubkey: &PublicKey, m: &BigUint) -> BigUint {
     m.modpow(&pubkey.e, &pubkey.n)
 }
 
-fn RSADP(privkey: &PrivateKey, c: &BigUint) -> BigUint {
+fn rsadp(privkey: &PrivateKey, c: &BigUint) -> BigUint {
     c.modpow(&privkey.d, &privkey.n)
 }
 
 #[cfg(target_endian = "big")]
-fn I2OSP(x: BigUint) -> Vec<u8> {
+fn i2osp(x: BigUint) -> Vec<u8> {
     x.to_bytes_be()
 }
 
 #[cfg(target_endian = "little")]
-fn I2OSP(x: BigUint) -> Vec<u8> {
+fn i2osp(x: BigUint) -> Vec<u8> {
     x.to_bytes_le()
 }
 
 #[cfg(target_endian = "big")]
-fn OS2IP(X: Vec<u8>) -> BigUint {
+fn os2ip(x: Vec<u8>) -> BigUint {
     BigUint::from_bytes_be(&X)
 }
 
 #[cfg(target_endian = "little")]
-fn OS2IP(X: Vec<u8>) -> BigUint {
-    BigUint::from_bytes_le(&X)
+fn os2ip(x: Vec<u8>) -> BigUint {
+    BigUint::from_bytes_le(&x)
 }
 
-fn RSASP1(K: &PrivateKey, m: &BigUint) -> Signature {
+fn rsasp1(k: &PrivateKey, m: &BigUint) -> Signature {
     // @TODO step one validation
-    m.modpow(&K.d, &K.n)
+    m.modpow(&k.d, &k.n)
 }
 
-fn RSAVP1(X: &PublicKey, s: &Signature) -> BigUint {
-    s.modpow(&X.e, &X.n)
+fn rsavp1(x: &PublicKey, s: &Signature) -> BigUint {
+    s.modpow(&x.e, &x.n)
 }
 
-fn RSAES_OAEP_ENCRYPT(pubkey: &PublicKey, M: Vec<u8>, L: &Vec<u8>) -> Vec<u8> {
-    // @TODO input validation step
-    // k - mLen - 2hLen - 2 zero octets
-    // 2. EME-OAEP encoding
-    let EM = EME_OAEP_ENCODE(pubkey, M, L);
-    let m = OS2IP(EM);
-    let c = RSAEP(pubkey, &m);
-    let C = I2OSP(c);
-    C
-}
-
-fn EME_OAEP_ENCODE(pubkey: &PublicKey, mut M: Vec<u8>, L: &Vec<u8>) -> Vec<u8> {
+fn eme_oaep_encode(pubkey: &PublicKey, mut m: Vec<u8>, l: &Vec<u8>) -> Vec<u8> {
     // b. Generate a padding string PS consisting of...
-    //      k - mLen - 2hLen - 2
+    //      k - mLen - 2H_LEN - 2
     //    ...zero octets. The length of PS may be zero.
     // !!!!!!!!
     // May be wrong as bits() strips leading zeroes.
     let k = pubkey.n.bits();
     // !!!!!!!!
-    let mut PS = vec![0; k - M.len() - (2 * hLen) - 2];
+    let mut ps = vec![0; k - m.len() - (2 * H_LEN) - 2];
     // c. Concatenate lHash, PS, a single octet with hexadecimal
     //           value 0x01, and the message M to form a data block DB of
-    //           length k - hLen - 1 octets as
+    //           length k - H_LEN - 1 octets as
     //     DB = lHash || PS || 0x01 || M.
     let mut hasher = Sha256::new();
-    hasher.input(L);
-    let mut lHash = Vec::from(hasher.result().iter().as_slice());
+    hasher.input(l);
+    let mut l_hash = Vec::from(hasher.result().iter().as_slice());
 
-    let mut DB = Vec::with_capacity(lHash.len() + PS.len() + 1 + M.len());
-    DB.append(&mut lHash);
-    DB.append(&mut PS);
-    DB.push(0x01);
-    DB.append(&mut M);
-    // d. Generate a random octet string seed of length hLen.
+    let mut db = Vec::with_capacity(l_hash.len() + ps.len() + 1 + m.len());
+    db.append(&mut l_hash);
+    db.append(&mut ps);
+    db.push(0x01);
+    db.append(&mut m);
+    // d. Generate a random octet string seed of length H_LEN.
     let mut rng = thread_rng();
-    let seed = (0..hLen).map(|_| rng.next_u32() as u8).collect();
-    // e. Let dbMask = MGF(seed, k - hLen - 1).
-    let dbMask = MGF(&seed, k - hLen - 1);
+    let seed = (0..H_LEN).map(|_| rng.next_u32() as u8).collect();
+    // e. Let dbMask = mgf(seed, k - H_LEN - 1).
+    let db_mask = mgf(&seed, k - H_LEN - 1);
     // f. Let maskedDB = DB \xor dbMask.
-    let mut maskedDB: Vec<u8> = DB
+    let mut masked_db: Vec<u8> = db
         .iter()
         .enumerate()
-        .map(|(index, value)| value ^ dbMask[index])
+        .map(|(index, value)| value ^ db_mask[index])
         .collect();
-    // g. Let seedMask = MGF(maskedDB, hLen).
-    let seedMask = MGF(&maskedDB, hLen);
+    // g. Let seedMask = mgf(maskedDB, H_LEN).
+    let seed_mask = mgf(&masked_db, H_LEN);
     // h. Let maskedSeed = seed \xor seedMask.
-    let mut maskedSeed: Vec<u8> = seed
+    let mut masked_seed: Vec<u8> = seed
         .iter()
         .enumerate()
-        .map(|(index, value)| value ^ seedMask[index])
+        .map(|(index, value)| value ^ seed_mask[index])
         .collect();
     // i. Concatenate a single octet with hexadecimal value 0x00,
     //           maskedSeed, and maskedDB to form an encoded message EM of
     //           length k octets as
     //     EM = 0x00 || maskedSeed || maskedDB.
-    let mut EM: Vec<u8> = Vec::with_capacity(k);
-    EM.push(0x00);
-    EM.append(&mut maskedSeed);
-    EM.append(&mut maskedDB);
+    let mut em: Vec<u8> = Vec::with_capacity(k);
+    em.push(0x00);
+    em.append(&mut masked_seed);
+    em.append(&mut masked_db);
     // May or may not be necessary, just...ya know...asserting.
-    assert_eq!(EM.len(), k);
-    EM
+    assert_eq!(em.len(), k);
+    em
 }
 
 // https://tools.ietf.org/html/rfc8017#appendix-B.2.1
-fn MGF(mgfSeed: &Vec<u8>, maskLen: usize) -> Vec<u8> {
-    let mut T: Vec<u8> = vec![];
-    for counter in 0..((maskLen as f32 / hLen as f32).ceil() as usize) - 1 {
+fn mgf(mgf_seed: &Vec<u8>, mask_len: usize) -> Vec<u8> {
+    let mut t: Vec<u8> = vec![];
+    for counter in 0..((mask_len as f32 / H_LEN as f32).ceil() as usize) - 1 {
         let mut hasher = Sha256::new();
-        let C = I2OSP(BigUint::from(counter));
-        hasher.input(&mgfSeed);
-        hasher.input(C);
-        T.append(&mut Vec::from(hasher.result().iter().as_slice()));
+        let c = i2osp(BigUint::from(counter));
+        hasher.input(&mgf_seed);
+        hasher.input(c);
+        t.append(&mut Vec::from(hasher.result().iter().as_slice()));
     }
-    T[0..maskLen].to_vec()
+    t[0..mask_len].to_vec()
 }
 
 #[cfg(test)]
@@ -163,20 +163,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn encrypt_decrypt() {
+    fn test_encrypt_decrypt() {
         let want = BigUint::new(vec![42]);
         let (pubkey, privkey) = new_key_pair();
-        let ciphertext = RSAEP(&pubkey, &want);
-        let got = RSADP(&privkey, &ciphertext);
+        let ciphertext = rsaep(&pubkey, &want);
+        let got = rsadp(&privkey, &ciphertext);
         assert_eq!(want, got);
     }
 
     #[test]
-    fn verification() {
+    fn test_verification() {
         let want = BigUint::new(vec![84]);
         let (pubkey, privkey) = new_key_pair();
-        let signature = RSASP1(&privkey, &want);
-        let got = RSAVP1(&pubkey, &signature);
+        let signature = rsasp1(&privkey, &want);
+        let got = rsavp1(&pubkey, &signature);
         assert_eq!(want, got);
+    }
+
+    #[test]
+    fn test_rsaes_oaep_encrypt() {
+        let (pubkey, _) = new_key_pair();
+        rsaes_oaep_encrypt(&pubkey, vec![], &vec![]);
+        unimplemented!();
     }
 }

@@ -1,5 +1,5 @@
 [package]
-name = "PKCS-1"
+name = "pkcs_1"
 version = "0.1.0"
 authors = ["christopher-henderson <chris@chenderson.org>"]
 edition = "2018"
